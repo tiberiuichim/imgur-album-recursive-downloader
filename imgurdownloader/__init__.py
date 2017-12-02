@@ -8,7 +8,6 @@ import click
 import configparser
 import requests
 from queue import Queue
-
 from slugify import UniqueSlugify
 from xdg import XDG_CONFIG_HOME
 
@@ -203,9 +202,15 @@ def download_album(url=None, album=None, destination=None):
 
     os.makedirs(album_path, exist_ok=True)
 
+    if G['find-albums']:
+        for album in find_albums(meta['description'] or ''):
+            logger.info("Queuing download of album: %s", album)
+            processor.put(lambda: download_album(album=album))
+
     with open(os.path.join(album_path, 'album-metadata.txt'), 'w') as f:
         f.write('Title %s\r' % meta['title'] or meta['id'])
         f.write('Album ID: %s\r' % album)
+        f.write('Description: %s\r' % meta['description'] or '')
 
     endpoint = "https://api.imgur.com/3/album/%s/images" % album
     try:

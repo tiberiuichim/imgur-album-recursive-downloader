@@ -23,7 +23,7 @@ new albums based on image text descriptions.
       keywords='imgur, downloader, script',
       author='Tiberiu Ichim',
       author_email='tiberiu.ichim@gmail.com',
-      url='https://play.pixelblaster.ro/',
+      url='https://github.com/tiberiuichim/imgur-album-recursive-downloader',
       license='GPL3',
       packages=find_packages(exclude=['ez_setup', 'examples', 'tests']),
       include_package_data=True,
