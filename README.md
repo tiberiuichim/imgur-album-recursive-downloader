@@ -16,3 +16,7 @@ The existing album downloader had a few problems:
 - It didn't grab the highest resolution of images.
 - It didn't save titles or descriptions of images
 - It didn't try to find other albums in the description of images
+
+### Note
+
+You'll need an imgur.com account, after that create a new application and generate a new clientid for your app. After that, you'll have to write the clientid in the configuration file. It is automatically generated for you, when you first run the app, at ``~/.config/imgurdownloader/settings.conf``
