@@ -2,6 +2,13 @@
 
 Download imgur albums, optionally discovering more albums in image descriptions
 
+
+### How to use
+
+1. Use pip to install ImgurDownloader (``pip install ImgurDownloader``)
+2. Run ``imgur http://imgur.com/a/Something path/to/some/folder``
+3. If you want to recursively download albums (it discovers new albums in the description of images), run: ``imgur --recursive http://imgur.com/a/Something path/to/some/folder``
+
 ### How to use (in development mode)
 
 1. Install virtualenv
