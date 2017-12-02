@@ -26,4 +26,4 @@ The existing album downloader had a few problems:
 
 ### Note
 
-You'll need an imgur.com account, after that create a new application and generate a new clientid for your app. After that, you'll have to write the clientid in the configuration file. It is automatically generated for you, when you first run the app, at ``~/.config/imgurdownloader/settings.conf``
+This app uses the Imgur.com developers API, so you'll need an imgur.com account to create a new application and generate a new clientid for your app. After that, you'll have to write the clientid in the configuration file, which is automatically generated for you when you first run the app, at ``~/.config/imgurdownloader/settings.conf``
