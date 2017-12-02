@@ -148,13 +148,15 @@ def get_album_id(url):
     if 'imgur.com' not in url:
         return
 
-    if '/gallery/' in url:
-        # https://imgur.com/gallery/Z0lda
+    if '/gallery/' in url:      # url such as https://imgur.com/gallery/Z0lda
 
         return url.split('/gallery/')[1]
 
     if '/a/' in url:
         return url.split('/a/')[1]
+
+    if '/r/' in url:            # url such as https://imgur.com/r/pics/AAAAA
+        return url.split('/')[-1]
 
 
 def get_album_metadata(album):
@@ -165,6 +167,9 @@ def get_album_metadata(album):
     response = request(endpoint)
 
     res = response.json()
+
+    if res['status'] != 200 or not(res['success']):
+        return False
 
     return res['data']
 
@@ -190,11 +195,20 @@ def download_album(url=None, album=None, destination=None):
 
     meta = get_album_metadata(album)
 
+    if not meta:
+        logger.error("Error retrieving album metadata for %s", album)
+
+        return
+
     logger.info("Got album titled %s", meta['title'])
 
     destination = destination or G.base
 
     sluger = UniqueSlugify()        # uids=os.listdir(destination)
+
+    if not meta['title']:
+        meta['title'] = 'Unknown Artists - Untitled Album'
+
     album_id = sluger(meta['title'])
     album_path = os.path.join(destination, album_id)
 
