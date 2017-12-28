@@ -100,11 +100,12 @@ def download(link, destination):
             f.write(chunk)
 
 
-def save_image(info, destination):
+def save_image(info, destination, num = ''):
     """ Downloads the image to the URL
 
     @param info: dict with metadata about image
     @param destination: directory where to download
+    @param num: image's (numeric) order in the album
     """
 
     url = info['link']
@@ -122,7 +123,13 @@ def save_image(info, destination):
 
     sluger = UniqueSlugify(uids=os.listdir(destination))
     slug = sluger(title)
-    filename = "%s.%s" % (slug, suffix)
+    filename = ""
+    if num == '':
+        filename = "%s.%s" % (slug, suffix)
+        logger.info("Image order not given")
+    else:
+        filename = "%s - %s.%s" % (num, slug, suffix)
+        logger.info("Image order is {}".format(num))
     filepath = os.path.join(destination, filename)
 
     download(info['link'], filepath)
@@ -130,7 +137,12 @@ def save_image(info, destination):
     description = info['description']
 
     if description:
-        txtpath = os.path.join(destination, '%s.txt' % slug)
+        txtpath = ''
+        if num == '':
+            txtpath = os.path.join(destination, '%s.txt' % slug)
+        else:
+            txtpath = os.path.join(destination, '%s - %s.txt' % (num, slug))
+
         with open(txtpath, 'w') as f:
             f.write("Title: %s\r" % title)
             f.write("Description: %s\r" % description)
@@ -236,8 +248,14 @@ def download_album(url=None, album=None, destination=None):
     if res['status'] != 200 or not(res['success']):
         return False
 
+    image_count = meta['images_count']
+    image_count_len = len(str(image_count))
+
+    count = 1
     for info in res['data']:
-        save_image(info, album_path)
+        strcount = str(count)
+        save_image(info, album_path, strcount.zfill(image_count_len))
+        count += 1
 
 
 def request(url):
