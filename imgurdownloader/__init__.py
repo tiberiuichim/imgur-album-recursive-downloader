@@ -126,10 +126,8 @@ def save_image(info, destination, num = ''):
     filename = ""
     if num == '':
         filename = "%s.%s" % (slug, suffix)
-        logger.info("Image order not given")
     else:
         filename = "%s - %s.%s" % (num, slug, suffix)
-        logger.info("Image order is {}".format(num))
     filepath = os.path.join(destination, filename)
 
     download(info['link'], filepath)
@@ -254,7 +252,10 @@ def download_album(url=None, album=None, destination=None):
     count = 1
     for info in res['data']:
         strcount = str(count)
-        save_image(info, album_path, strcount.zfill(image_count_len))
+        if G['ordered']:
+            save_image(info, album_path, strcount.zfill(image_count_len))
+        else:
+            save_image(info, album_path)
         count += 1
 
 
@@ -270,9 +271,11 @@ def request(url):
               default=False,
               help="Discover other albums in image descriptions")
 @click.option('-v', '--verbose', count=True, help="Verbose mode")
+@click.option('--ordered/--not-ordered', default=False,
+              help="Whether the images' names will be prefixed by their order in the album")
 @click.argument("url")
 @click.argument("destination")
-def downloader(url, destination, recursive, verbose):
+def downloader(url, destination, recursive, verbose, ordered):
     settings = get_settings()
     clientid = settings['clientid']
 
@@ -284,6 +287,7 @@ def downloader(url, destination, recursive, verbose):
     G['clientid'] = clientid
     G['base'] = destination
     G['find-albums'] = recursive
+    G['ordered'] = ordered
 
     processor.put(lambda: download_album(url=url))
     processor.start()
