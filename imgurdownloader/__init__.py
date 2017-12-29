@@ -100,11 +100,12 @@ def download(link, destination):
             f.write(chunk)
 
 
-def save_image(info, destination):
+def save_image(info, destination, num = ''):
     """ Downloads the image to the URL
 
     @param info: dict with metadata about image
     @param destination: directory where to download
+    @param num: image's (numeric) order in the album
     """
 
     url = info['link']
@@ -122,7 +123,11 @@ def save_image(info, destination):
 
     sluger = UniqueSlugify(uids=os.listdir(destination))
     slug = sluger(title)
-    filename = "%s.%s" % (slug, suffix)
+    filename = ""
+    if G['ordered']:
+        filename = "%s - %s.%s" % (num, slug, suffix)
+    else:
+        filename = "%s.%s" % (slug, suffix)
     filepath = os.path.join(destination, filename)
 
     download(info['link'], filepath)
@@ -130,7 +135,12 @@ def save_image(info, destination):
     description = info['description']
 
     if description:
-        txtpath = os.path.join(destination, '%s.txt' % slug)
+        txtpath = ''
+        if G['ordered']:
+            txtpath = os.path.join(destination, '%s - %s.txt' % (num, slug))
+        else:
+            txtpath = os.path.join(destination, '%s.txt' % slug)
+
         with open(txtpath, 'w') as f:
             f.write("Title: %s\r" % title)
             f.write("Description: %s\r" % description)
@@ -236,8 +246,17 @@ def download_album(url=None, album=None, destination=None):
     if res['status'] != 200 or not(res['success']):
         return False
 
+    image_count = meta['images_count']
+    image_count_len = len(str(image_count))
+
+    count = 1
     for info in res['data']:
-        save_image(info, album_path)
+        strcount = str(count)
+        if G['ordered']:
+            save_image(info, album_path, strcount.zfill(image_count_len))
+        else:
+            save_image(info, album_path)
+        count += 1
 
 
 def request(url):
@@ -252,9 +271,11 @@ def request(url):
               default=False,
               help="Discover other albums in image descriptions")
 @click.option('-v', '--verbose', count=True, help="Verbose mode")
+@click.option('--ordered/--not-ordered', default=False,
+              help="Whether the images' names will be prefixed by their order in the album")
 @click.argument("url")
 @click.argument("destination")
-def downloader(url, destination, recursive, verbose):
+def downloader(url, destination, recursive, verbose, ordered):
     settings = get_settings()
     clientid = settings['clientid']
 
@@ -266,6 +287,7 @@ def downloader(url, destination, recursive, verbose):
     G['clientid'] = clientid
     G['base'] = destination
     G['find-albums'] = recursive
+    G['ordered'] = ordered
 
     processor.put(lambda: download_album(url=url))
     processor.start()
