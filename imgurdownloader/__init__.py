@@ -124,10 +124,10 @@ def save_image(info, destination, num = ''):
     sluger = UniqueSlugify(uids=os.listdir(destination))
     slug = sluger(title)
     filename = ""
-    if num == '':
-        filename = "%s.%s" % (slug, suffix)
-    else:
+    if G['ordered']:
         filename = "%s - %s.%s" % (num, slug, suffix)
+    else:
+        filename = "%s.%s" % (slug, suffix)
     filepath = os.path.join(destination, filename)
 
     download(info['link'], filepath)
@@ -136,10 +136,10 @@ def save_image(info, destination, num = ''):
 
     if description:
         txtpath = ''
-        if num == '':
-            txtpath = os.path.join(destination, '%s.txt' % slug)
-        else:
+        if G['ordered']:
             txtpath = os.path.join(destination, '%s - %s.txt' % (num, slug))
+        else:
+            txtpath = os.path.join(destination, '%s.txt' % slug)
 
         with open(txtpath, 'w') as f:
             f.write("Title: %s\r" % title)
