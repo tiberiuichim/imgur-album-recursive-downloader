@@ -3,6 +3,7 @@ import os
 import re
 import sys
 from collections import UserDict
+from datetime import datetime
 
 import click
 import configparser
@@ -22,6 +23,103 @@ clientid =
 
 URLS_REGEX = 'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|' \
     '(?:%[0-9a-fA-F][0-9a-fA-F]))+'
+
+STYLE = """
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+	<xsl:output method="html" indent="yes"/>
+	<xsl:template name="UnixTime-to-dateTime">
+		<!-- https://stackoverflow.com/a/58145572/401059 -->
+		<xsl:param name="unixTime"/>
+
+		<xsl:variable name="JDN" select="floor($unixTime div 86400) + 2440588" />
+		<xsl:variable name="secs" select="$unixTime mod 86400" />
+
+		<xsl:variable name="f" select="$JDN + 1401 + floor((floor((4 * $JDN + 274277) div 146097) * 3) div 4) - 38"/>
+		<xsl:variable name="e" select="4*$f + 3"/>
+		<xsl:variable name="g" select="floor(($e mod 1461) div 4)"/>
+		<xsl:variable name="h" select="5*$g + 2"/>
+
+		<xsl:variable name="d" select="floor(($h mod 153) div 5 ) + 1"/>
+		<xsl:variable name="m" select="(floor($h div 153) + 2) mod 12 + 1"/>
+		<xsl:variable name="y" select="floor($e div 1461) - 4716 + floor((14 - $m) div 12)"/>
+
+		<xsl:variable name="H" select="floor($secs div 3600)"/>
+		<xsl:variable name="M" select="floor($secs mod 3600 div 60)"/>
+		<xsl:variable name="S" select="$secs mod 60"/>
+
+		<xsl:value-of select="$y"/>
+		<xsl:text>-</xsl:text>
+		<xsl:value-of select="format-number($m, '00')"/>
+		<xsl:text>-</xsl:text>
+		<xsl:value-of select="format-number($d, '00')"/>
+		<xsl:text> </xsl:text>
+		<xsl:value-of select="format-number($H, '00')"/>
+		<xsl:text>:</xsl:text>
+		<xsl:value-of select="format-number($M, '00')"/>
+		<xsl:text>:</xsl:text>
+		<xsl:value-of select="format-number($S, '00')"/>
+	</xsl:template>
+	<xsl:template match="album">
+		<html>
+			<body style="background-color: #141518; color: #d9d9da; font-family: &quot;Open Sans&quot;, sans-serif">
+				<!-- selection background color is #1bb76e; really just a gimmick -->
+				<div style="max-width: 180mm; margin: 0px auto; background-color: #2c2f34;">
+					<div style="padding: 20px 20px 25px;">
+						<h1 style="font-size: 18px;">
+							<xsl:value-of select="meta/title" />
+						</h1>
+						<small style="color: #bbb;">
+							<xsl:choose>
+								<xsl:when test="meta/account/url">
+									by <b><xsl:value-of select="meta/account/url" /></b>
+								</xsl:when>
+								<xsl:otherwise>
+									Uploaded
+								</xsl:otherwise>
+							</xsl:choose>
+							&#8195;
+							<xsl:call-template name="UnixTime-to-dateTime">
+								<xsl:with-param name="unixTime" select="meta/datetime" />
+							</xsl:call-template>
+							&#8195;
+							(archived: <xsl:call-template name="UnixTime-to-dateTime">
+									<xsl:with-param name="unixTime" select="meta/archived" />
+							</xsl:call-template>)
+						</small>
+					</div>
+					<xsl:for-each select="content/entry">
+						<div style="padding: 10px 0px;">
+							<xsl:if test="id"><a id="{id}" /></xsl:if>
+							<a id="{position()}" />
+							<div style="background-color: black; width: 100%;">
+								<xsl:choose>
+									<xsl:when test="img">
+										<a href="{img}">
+											<img src="{img}" style="max-width:100%; margin: 0px auto; display: block;" />
+										</a>
+									</xsl:when>
+									<xsl:when test="vid">
+										<video loop="" autoplay="" muted="" controls="" style="max-width: 100%;">
+											<source src="{vid}" />
+											[Videos not supported by browser.]
+										</video>
+									</xsl:when>
+									<xsl:otherwise>
+										[ERROR: Data missing!]
+									</xsl:otherwise>
+								</xsl:choose>
+							</div>
+							<xsl:if test="desc"><div style="padding: 20px 20px 15px;">
+								<xsl:copy-of select="desc/node()"/>
+							</div></xsl:if>
+						</div>
+					</xsl:for-each>
+				</div>
+			</body>
+		</html>
+	</xsl:template>
+</xsl:stylesheet>
+"""
 
 logger = logging.getLogger(NAME)
 logger.setLevel(logging.INFO)
@@ -100,7 +198,7 @@ def download(link, destination):
             f.write(chunk)
 
 
-def save_image(info, destination):
+def save_image(info, destination, idx):
     """ Downloads the image to the URL
 
     @param info: dict with metadata about image
@@ -122,7 +220,7 @@ def save_image(info, destination):
 
     sluger = UniqueSlugify(uids=os.listdir(destination))
     slug = sluger(title)
-    filename = "%s.%s" % (slug, suffix)
+    filename = "%04d-%s.%s" % (idx, slug, suffix)
     filepath = os.path.join(destination, filename)
 
     download(info['link'], filepath)
@@ -130,15 +228,29 @@ def save_image(info, destination):
     description = info['description']
 
     if description:
-        txtpath = os.path.join(destination, '%s.txt' % slug)
-        with open(txtpath, 'w') as f:
-            f.write("Title: %s\r" % title)
-            f.write("Description: %s\r" % description)
+        if not G['xml']:
+            txtpath = os.path.join(destination, '%04d-%s.txt' % (idx, slug))
+            with open(txtpath, 'w') as f:
+                f.write("Title: %s\r" % title)
+                f.write("Description: %s\r" % description)
 
         if G['find-albums']:
             for album in find_albums(description):
                 logger.info("Queuing download of album: %s", album)
                 processor.put(lambda: download_album(album=album))
+
+    typ = "img"
+    if suffix in ["mp4", "webm", "ogv", "ogg"]:
+        typ = "vid"
+    if suffix in ["gifv"]:
+        typ = "gifv" # doesn't actually exist?
+
+    return {
+        typ: filename,
+        "title": info['title'],
+        "id": info['id'],
+        "desc": info['description']
+    }
 
 
 def get_album_id(url):
@@ -221,10 +333,11 @@ def download_album(url=None, album=None, destination=None):
             logger.info("Queuing download of album: %s", album)
             processor.put(lambda: download_album(album=album))
 
-    with open(os.path.join(album_path, 'album-metadata.txt'), 'w') as f:
-        f.write('Title %s\r' % meta['title'] or meta['id'])
-        f.write('Album ID: %s\r' % album)
-        f.write('Description: %s\r' % meta['description'] or '')
+    if not G['xml']:
+        with open(os.path.join(album_path, 'album-metadata.txt'), 'w') as f:
+            f.write('Title %s\r' % meta['title'] or meta['id'])
+            f.write('Album ID: %s\r' % album)
+            f.write('Description: %s\r' % meta['description'] or '')
 
     endpoint = "https://api.imgur.com/3/album/%s/images" % album
     try:
@@ -236,8 +349,43 @@ def download_album(url=None, album=None, destination=None):
     if res['status'] != 200 or not(res['success']):
         return False
 
-    for info in res['data']:
-        save_image(info, album_path)
+    if not G['xml']:
+        for idx, info in enumerate(res['data']):
+            entry = save_image(info, album_path, idx)
+    else:
+        with open(os.path.join(album_path, 'index.xml'), 'w') as xml:
+            xml.write(
+                '<?xml version="1.0"?>\n' +
+                '<?xml-stylesheet type="text/xsl" href="archive.xsl"?>\n' +
+                '<!DOCTYPE album>\n' +
+                '<album>\n' +
+                '\t<meta>\n'+
+                '\t\t<id>%s</id>\n' % album +
+                '\t\t<title>%s</title>\n' % meta['title'] +
+                ('\t\t<desc>%s</desc>\n' % meta['description'] if meta['description'] is not None else '') +
+                '\t\t<account>\n' +
+                '\t\t\t<url>%s</url>\n' % meta['account_url'] +
+                '\t\t\t<id>%s</id>\n' % meta['account_id'] +
+                '\t\t</account>\n' +
+                '\t\t<datetime>%d</datetime>\n' % meta['datetime'] +
+                '\t\t<archived>%d</archived>\n' % datetime.now(tz=None).timestamp() +
+                '\t\t<views>%d</views>\n' % meta['views'] +
+                '\t\t<nsfw>%s</nsfw>\n' % meta['nsfw'] +
+                '\t</meta>\n' +
+                '\t<content>\n'
+            )
+            xml.flush()
+
+            for idx, info in enumerate(res['data']):
+                entry = save_image(info, album_path, idx)
+                xml.write('\t\t<entry>\n%s\t\t</entry>\n' % ''.join(
+                    '\t\t\t<%s>%s</%s>\n' % (k, '<br />'.join(v.splitlines()), k) for k, v in entry.items() if v is not None
+                ))
+
+            xml.write('\t</content>\n</album>\n')
+
+            with open(os.path.join(album_path, 'archive.xsl'), 'w') as style:
+                style.write(STYLE)
 
 
 def request(url):
@@ -251,10 +399,13 @@ def request(url):
 @click.option('--recursive/--no-recursive',
               default=False,
               help="Discover other albums in image descriptions")
+@click.option('--xml/--no-xml',
+              default=False,
+              help="Write an XML document containing titles and descriptions")
 @click.option('-v', '--verbose', count=True, help="Verbose mode")
 @click.argument("url")
 @click.argument("destination")
-def downloader(url, destination, recursive, verbose):
+def downloader(url, destination, recursive, verbose, xml):
     settings = get_settings()
     clientid = settings['clientid']
 
@@ -266,6 +417,7 @@ def downloader(url, destination, recursive, verbose):
     G['clientid'] = clientid
     G['base'] = destination
     G['find-albums'] = recursive
+    G['xml'] = xml
 
     processor.put(lambda: download_album(url=url))
     processor.start()
